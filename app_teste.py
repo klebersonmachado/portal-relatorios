@@ -35,8 +35,8 @@ st.markdown("""
     .chart-card { background-color: #ffffff; padding: 15px; border-radius: 8px; border: 1px solid #e1e4e8; box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.04); margin-bottom: 25px; width: 100%; }
     .chart-card-compact { background-color: #ffffff; padding: 8px; border-radius: 6px; border: 1px solid #e1e4e8; margin-bottom: 10px; }
     
-    /* 4. TABELAS CUSTOMIZADAS EM HTML */
-    .custom-table { width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 14px; margin-top: 10px; }
+    /* 4. TABELAS CUSTOMIZADAS EM HTML - Largura reduzida para 70% e centralizada */
+    .custom-table { width: 70%; margin-left: auto; margin-right: auto; border-collapse: collapse; font-family: sans-serif; font-size: 14px; margin-top: 10px; }
     .custom-table th { background-color: #1f497d; color: #ffffff; font-weight: bold; text-align: center; padding: 8px; border: 1px solid #e1e4e8; }
     .custom-table td { border: 1px solid #e1e4e8; padding: 6px; text-align: center; }
     .td-dia { font-weight: bold; background-color: #ffffff; color: #000000; }
@@ -135,13 +135,11 @@ def carregar_todos_os_dados(url):
         if op_atual:
             dia_limpo = None
             
-            # 1. Se o Excel mandou como Data real (Timestamp)
             if isinstance(val_a, pd.Timestamp) or isinstance(val_a, datetime):
                 dia_limpo = val_a.strftime("%d/%m")
-            # 2. Se o Excel mandou como Texto com formatação (ex: "01/06 seg.")
             elif str_a[0].isdigit() and ('/' in str_a or '-' in str_a):
                 texto_data = str_a.split(' ')[0] 
-                if '-' in texto_data and len(texto_data.split('-')) == 3: # Formato YYYY-MM-DD
+                if '-' in texto_data and len(texto_data.split('-')) == 3: 
                     partes = texto_data.split('-')
                     dia_limpo = f"{partes[2]}/{partes[1]}"
                 else:
@@ -178,7 +176,6 @@ def carregar_todos_os_dados(url):
                     "TMA Voz (Min)": limpa_tma(row[6])
                 })
     
-    # Criamos o dataframe já com as colunas oficiais, evitando o KeyError se a aba vier vazia
     cols_oficiais = ["Dia", "Operação", "Vol Msg", "NS Msg", "TMA Msg (Min)", "Vol Voz", "NS Voz", "TMA Voz (Min)"]
     df_diario = pd.DataFrame(linhas_processadas, columns=cols_oficiais)
     
@@ -268,7 +265,7 @@ if aba_selecionada == "Geral":
 # 2. GUIA: NS POR OPERAÇÃO
 # ==============================================================================
 elif aba_selecionada == "NS por Operação":
-    st.title("NS por Operação — Ampliação Maio")
+    st.title("NS por Operação — Mensageria × Telefonia")
     
     df_ops = df_resumo[df_resumo['Operação'] != 'GERAL']
     df_melt = df_ops.melt(id_vars=['Operação'], value_vars=['NS Mensageria', 'NS Telefonia'], var_name='Canal', value_name='Val')
@@ -286,11 +283,8 @@ elif aba_selecionada == "NS por Operação":
 
     lista_ops = ['SAC', 'RETENÇÃO', 'COBRANÇA', 'SUPORTE', 'MULTISKILL']
     
-    # Criamos 2 linhas com 3 colunas cada para dar muito mais espaço
     col1, col2, col3 = st.columns(3)
     col4, col5, col6 = st.columns(3)
-    
-    # Distribuindo os 5 gráficos nessas colunas maiores
     col_list = [col1, col2, col3, col4, col5]
     
     for idx, o in enumerate(lista_ops):
@@ -298,15 +292,15 @@ elif aba_selecionada == "NS por Operação":
             st.markdown(f'<div class="chart-card-compact">', unsafe_allow_html=True)
             st.markdown(f"<p style='text-align: center; font-weight: bold; margin-bottom: 5px;'>{o}</p>", unsafe_allow_html=True)
             
-            # Checa se a operação existe na tabela
             if o in df_diario['Operação'].values:
                 df_sub = df_diario[df_diario['Operação'] == o].sort_values('Dia')
-                fig_line = go.Figure()
-                fig_line.add_trace(go.Scatter(x=df_sub['Dia'], y=df_sub['NS Msg']*100, name='Msg', mode='lines+markers', marker=dict(symbol='circle', size=6), line=dict(color='#2b7bba', width=1.5)))
-                fig_line.add_trace(go.Scatter(x=df_sub['Dia'], y=df_sub['NS Voz']*100, name='Voz', mode='lines+markers', marker=dict(symbol='circle', size=6), line=dict(color='#7b3294', width=1.5)))
-                fig_line.add_trace(go.Scatter(x=df_sub['Dia'], y=[90]*len(df_sub), name='Meta', line=dict(color='gray', width=1, dash='dash')))
-                fig_line.update_layout(height=260, margin=dict(l=25, r=10, t=10, b=20), showlegend=False, yaxis=dict(range=[0, 105], ticksuffix="%"))
-                st.plotly_chart(fig_line, use_container_width=True)
+                fig_bar = go.Figure()
+                fig_bar.add_trace(go.Bar(x=df_sub['Dia'], y=df_sub['NS Msg']*100, name='Msg', marker_color='#2b7bba'))
+                fig_bar.add_trace(go.Bar(x=df_sub['Dia'], y=df_sub['NS Voz']*100, name='Voz', marker_color='#7b3294'))
+                fig_bar.add_trace(go.Scatter(x=df_sub['Dia'], y=[90]*len(df_sub), name='Meta', mode='lines', line=dict(color='gray', width=2, dash='dash')))
+                
+                fig_bar.update_layout(barmode='group', height=260, margin=dict(l=25, r=10, t=10, b=20), showlegend=False, yaxis=dict(range=[0, 105], ticksuffix="%"))
+                st.plotly_chart(fig_bar, use_container_width=True)
             else:
                 st.info("Sem dados")
             st.markdown('</div>', unsafe_allow_html=True)
