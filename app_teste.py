@@ -9,13 +9,14 @@ from datetime import datetime
 st.set_page_config(page_title="Portal de Relatórios Operacionais", layout="wide")
 
 # --- DICIONÁRIO DE MESES (COLE SEUS IDs AQUI) ---
+# --- DICIONÁRIO DE MESES (SEUS IDs OFICIAIS) ---
 DICIONARIO_MESES = {
-    "Junho": "https://docs.google.com/spreadsheets/d/1An2VatUjSA2vK6ACMDHqj2fGPuTAesQt/edit?usp=drive_link&ouid=116819333152565332012&rtpof=true&sd=true",
-    "Maio": "https://docs.google.com/spreadsheets/d/1fN1SEY6PPEDv3ddgO5yrTXlOcW74txci/edit?usp=drive_link&ouid=116819333152565332012&rtpof=true&sd=true",
-    "Abril": "https://docs.google.com/spreadsheets/d/1V-8ep3jwfopsSUS_T1jWY6IIsyoyNB8Q/edit?usp=drive_link&ouid=116819333152565332012&rtpof=true&sd=true",
-    "Março": "https://docs.google.com/spreadsheets/d/1XyOpoVV7RdhDYLoCx8pXOkrISKhM-mGE/edit?usp=drive_link&ouid=116819333152565332012&rtpof=true&sd=true",
-    "Fevereiro": "https://docs.google.com/spreadsheets/d/15wq21hK0Fq6rQ2BSo81ExFwBE7-Xnqv-/edit?usp=drive_link&ouid=116819333152565332012&rtpof=true&sd=true",
-    "Janeiro": "https://docs.google.com/spreadsheets/d/1IcPt-joPemedwUmK4-SAQ41OIN8e6PVf/edit?usp=drive_link&ouid=116819333152565332012&rtpof=true&sd=true"
+    "Junho": "1An2VatUjSA2vK6ACMDHqj2fGPuTAesQt",
+    "Maio": "1fN1SEY6PPEDv3ddgO5yrTXlOcW74txci",
+    "Abril": "1V-8ep3jwfopsSUS_T1jWY6IIsyoyNB8Q",
+    "Março": "1XyOpoVV7RdhDYLoCx8pXOkrISKhM-mGE",
+    "Fevereiro": "15wq21hK0Fq6rQ2BSo81ExFwBE7-Xnqv-",
+    "Janeiro": "1IcPt-joPemedwUmK4-SAQ41OIN8e6PVf"
 }
 
 # --- ESTILIZAÇÃO CSS AVANÇADA ---
