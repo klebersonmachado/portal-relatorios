@@ -35,7 +35,7 @@ st.markdown("""
     .chart-card { background-color: #ffffff; padding: 15px; border-radius: 8px; border: 1px solid #e1e4e8; box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.04); margin-bottom: 25px; width: 100%; }
     .chart-card-compact { background-color: #ffffff; padding: 8px; border-radius: 6px; border: 1px solid #e1e4e8; margin-bottom: 10px; }
     
-    /* 4. TABELAS CUSTOMIZADAS EM HTML - Largura 85% para caber o TME com folga */
+    /* 4. TABELAS CUSTOMIZADAS EM HTML */
     .custom-table { width: 85%; margin-left: auto; margin-right: auto; border-collapse: collapse; font-family: sans-serif; font-size: 14px; margin-top: 10px; }
     .custom-table th { background-color: #1f497d; color: #ffffff; font-weight: bold; text-align: center; padding: 8px; border: 1px solid #e1e4e8; }
     .custom-table td { border: 1px solid #e1e4e8; padding: 6px; text-align: center; }
@@ -94,7 +94,9 @@ def renderizar_tabela_diario_rep_html(df):
         html += "<tr>"
         for col in df.columns:
             val = str(row[col])
-            if col in ['NS Msg', 'NS Voz'] and '%' in val:
+            # Tratamento de segurança para não exibir "nan%" no HTML
+            if val == 'nan%': html += f"<td class='td-vazio'>—</td>"
+            elif col in ['NS Msg', 'NS Voz'] and '%' in val:
                 try:
                     v = float(val.replace('%', ''))
                     if v < 90.0: html += f"<td class='td-vermelho'>{val}</td>"
@@ -110,7 +112,6 @@ def renderizar_tabela_diario_rep_html(df):
 def carregar_todos_os_dados(url):
     df_main = pd.read_excel(url, header=3).dropna(subset=['Operação'])
     
-    # Adicionando a leitura inteligente do TME também
     colunas_tempo = ['TMA Mensageria', 'TME Mensageria', 'TMA Telefonia', 'TME', 'TME Telefonia']
     for col in colunas_tempo:
         if col in df_main.columns:
@@ -166,15 +167,26 @@ def carregar_todos_os_dados(url):
                         return int(partes[0]) * 60 + int(partes[1]) + int(partes[2]) / 60
                     except: return 0.0
 
+                v_msg = limpa_vol(row[1])
+                n_msg = limpa_ns(row[2])
+                t_msg = limpa_tma(row[3])
+                v_voz = limpa_vol(row[4])
+                n_voz = limpa_ns(row[5])
+                t_voz = limpa_tma(row[6])
+
+                # FILTRO DE DIAS FUTUROS/VAZIOS: Se a linha for zerada, ele pula e não sobe pro painel.
+                if v_msg == 0 and v_voz == 0 and pd.isna(n_msg) and pd.isna(n_voz):
+                    continue
+
                 linhas_processadas.append({
                     "Dia": dia_limpo,
                     "Operação": op_atual,
-                    "Vol Msg": limpa_vol(row[1]),
-                    "NS Msg": limpa_ns(row[2]),
-                    "TMA Msg (Min)": limpa_tma(row[3]),
-                    "Vol Voz": limpa_vol(row[4]),
-                    "NS Voz": limpa_ns(row[5]),
-                    "TMA Voz (Min)": limpa_tma(row[6])
+                    "Vol Msg": v_msg,
+                    "NS Msg": n_msg,
+                    "TMA Msg (Min)": t_msg,
+                    "Vol Voz": v_voz,
+                    "NS Voz": n_voz,
+                    "TMA Voz (Min)": t_voz
                 })
     
     cols_oficiais = ["Dia", "Operação", "Vol Msg", "NS Msg", "TMA Msg (Min)", "Vol Voz", "NS Voz", "TMA Voz (Min)"]
@@ -225,7 +237,6 @@ if aba_selecionada == "Geral":
     tma_msg_str = formatar_para_ms(df_geral['TMA Mensageria (Minutos)'].values[0]) if not df_geral.empty else "37m56s"
     tma_voz_str = formatar_para_ms(df_geral['TMA Telefonia (Minutos)'].values[0]) if not df_geral.empty else "6m56s"
 
-    # Verificando as colunas de TME
     tme_msg_str = formatar_para_ms(df_geral['TME Mensageria (Minutos)'].values[0]) if 'TME Mensageria (Minutos)' in df_geral.columns and not df_geral.empty else "—"
     
     if 'TME Telefonia (Minutos)' in df_geral.columns:
@@ -235,7 +246,6 @@ if aba_selecionada == "Geral":
     else:
         tme_voz_str = "—"
 
-    # Calculando os volumes TOTAIS reais a partir da aba Diário
     tot_msg_geral = df_diario[df_diario['Operação'] != 'GERAL']['Vol Msg'].sum()
     tot_voz_geral = df_diario[df_diario['Operação'] != 'GERAL']['Vol Voz'].sum()
     vol_msg_str = f"{tot_msg_geral:,.0f}".replace(',', '.') + " atend."
@@ -243,7 +253,6 @@ if aba_selecionada == "Geral":
 
     st.title("Visão Geral")
     
-    # Nova estrutura de cards: Linha 1 (Msg), Linha 2 (Voz)
     html_cards = f"""
     <div class="card-container">
         <div class="kpi-card card-blue"><div class="card-title">NS Mensageria</div><div class="card-value">{ns_msg}</div><div class="card-sub">{vol_msg_str}</div></div>
@@ -258,7 +267,6 @@ if aba_selecionada == "Geral":
     """
     st.markdown(html_cards, unsafe_allow_html=True)
 
-    # Gráficos agora em 3 colunas para incluir o TME
     colg1, colg2, colg3 = st.columns(3)
     with colg1:
         st.subheader("🎯 Nível de Serviço (NS)")
@@ -336,7 +344,8 @@ elif aba_selecionada == "NS por Operação":
                     st.markdown(f"<p style='text-align: center; font-weight: bold; margin-bottom: 5px;'>{o}</p>", unsafe_allow_html=True)
                     
                     if o in df_diario['Operação'].values:
-                        df_sub = df_diario[df_diario['Operação'] == o].sort_values('Dia')
+                        # Removido o sort_values alfabético, preservando ordem do Excel
+                        df_sub = df_diario[df_diario['Operação'] == o].copy()
                         fig_bar = go.Figure()
                         
                         fig_bar.add_trace(go.Bar(x=df_sub['Dia'], y=df_sub['NS Msg']*100, name='Mensageria', marker_color='#2b7bba'))
@@ -365,7 +374,9 @@ elif aba_selecionada == "NS Diário (perdas)":
 
     colunas_ordem = ['GERAL', 'SAC', 'RETENÇÃO', 'COBRANÇA', 'SUPORTE', 'MULTISKILL']
     colunas_display = ['Geral', 'SAC', 'RETENÇÃO', 'COBRANÇA', 'SUPORTE', 'MULTISKILL']
-    df_chart_data = df_diario[df_diario['Operação'] != 'GERAL'].sort_values('Dia').copy()
+    
+    # Preservando a ordem do Excel
+    df_chart_data = df_diario[df_diario['Operação'] != 'GERAL'].copy()
     df_chart_data['NS Msg (%)'] = df_chart_data['NS Msg'] * 100
     df_chart_data['NS Voz (%)'] = df_chart_data['NS Voz'] * 100
     cores_ops = {'SAC': '#5b9bd5', 'RETENÇÃO': '#ffc000', 'COBRANÇA': '#c00000', 'SUPORTE': '#70ad47', 'MULTISKILL': '#7030a0'}
@@ -430,7 +441,7 @@ elif aba_selecionada == "Tabela Consolidada":
     df_report.loc[df_report['Operação'] == 'GERAL', 'Total Msg'] = total_geral_msg
     df_report['Total Msg'] = df_report['Total Msg'].fillna(0).map('{:,.0f}'.format).str.replace(',', '.')
     
-    df_report['NS Msg'] = (df_tab['NS Mensageria'] * 100).map('{:.1f}%'.format)
+    df_report['NS Msg'] = df_tab['NS Mensageria'].apply(lambda x: f"{x*100:.1f}%" if pd.notna(x) else "—")
     df_report['TMA Msg'] = df_tab['TMA Mensageria (Minutos)'].apply(formatar_para_ms)
     df_report['TME Msg'] = df_tab['TME Mensageria (Minutos)'].apply(formatar_para_ms) if 'TME Mensageria (Minutos)' in df_tab.columns else "—"
     
@@ -438,7 +449,7 @@ elif aba_selecionada == "Tabela Consolidada":
     df_report.loc[df_report['Operação'] == 'GERAL', 'Total Voz'] = total_geral_voz
     df_report['Total Voz'] = df_report['Total Voz'].fillna(0).map('{:,.0f}'.format).str.replace(',', '.')
     
-    df_report['NS Voz'] = (df_tab['NS Telefonia'] * 100).map('{:.1f}%'.format)
+    df_report['NS Voz'] = df_tab['NS Telefonia'].apply(lambda x: f"{x*100:.1f}%" if pd.notna(x) else "—")
     df_report['TMA Voz'] = df_tab['TMA Telefonia (Minutos)'].apply(formatar_para_ms)
     
     tme_voz_col = 'TME Telefonia (Minutos)' if 'TME Telefonia (Minutos)' in df_tab.columns else ('TME (Minutos)' if 'TME (Minutos)' in df_tab.columns else None)
@@ -457,15 +468,15 @@ elif aba_selecionada == "Diário por Operação":
     op_disponiveis = df_diario['Operação'].unique().tolist()
     if op_disponiveis:
         op_selecionada = st.selectbox("Selecione a Operação para Filtro:", op_disponiveis)
-        df_filtro = df_diario[df_diario['Operação'] == op_selecionada].sort_values('Dia').copy()
+        df_filtro = df_diario[df_diario['Operação'] == op_selecionada].copy()
         
         df_diario_rep = pd.DataFrame()
         df_diario_rep['Dia'] = df_filtro['Dia']
         df_diario_rep['Vol Msg'] = df_filtro['Vol Msg'].map('{:,.0f}'.format).str.replace(',', '.')
-        df_diario_rep['NS Msg'] = (df_filtro['NS Msg'] * 100).map('{:.1f}%'.format)
+        df_diario_rep['NS Msg'] = df_filtro['NS Msg'].apply(lambda x: f"{x*100:.1f}%" if pd.notna(x) else "—")
         df_diario_rep['TMA Msg'] = df_filtro['TMA Msg (Min)'].apply(formatar_para_ms)
         df_diario_rep['Vol Voz'] = df_filtro['Vol Voz'].map('{:,.0f}'.format).str.replace(',', '.')
-        df_diario_rep['NS Voz'] = (df_filtro['NS Voz'] * 100).map('{:.1f}%'.format)
+        df_diario_rep['NS Voz'] = df_filtro['NS Voz'].apply(lambda x: f"{x*100:.1f}%" if pd.notna(x) else "—")
         df_diario_rep['TMA Voz'] = df_filtro['TMA Voz (Min)'].apply(formatar_para_ms)
 
         st.markdown('<div class="chart-card">', unsafe_allow_html=True)
