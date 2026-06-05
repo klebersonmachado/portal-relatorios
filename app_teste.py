@@ -35,7 +35,7 @@ st.markdown("""
     .chart-card { background-color: #ffffff; padding: 15px; border-radius: 8px; border: 1px solid #e1e4e8; box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.04); margin-bottom: 25px; width: 100%; }
     .chart-card-compact { background-color: #ffffff; padding: 8px; border-radius: 6px; border: 1px solid #e1e4e8; margin-bottom: 10px; }
     
-    /* 4. TABELAS CUSTOMIZADAS EM HTML */
+    /* 4. TABELAS CUSTOMIZADAS EM HTML - Largura 85% para caber o TME com folga */
     .custom-table { width: 85%; margin-left: auto; margin-right: auto; border-collapse: collapse; font-family: sans-serif; font-size: 14px; margin-top: 10px; }
     .custom-table th { background-color: #1f497d; color: #ffffff; font-weight: bold; text-align: center; padding: 8px; border: 1px solid #e1e4e8; }
     .custom-table td { border: 1px solid #e1e4e8; padding: 6px; text-align: center; }
@@ -162,10 +162,28 @@ def carregar_todos_os_dados(url):
                 def limpa_tma(v):
                     if pd.isna(v) or str(v).strip() == '': return 0.0
                     try:
-                        if hasattr(v, 'hour'): return v.hour * 60 + v.minute + v.second / 60
-                        partes = str(v).split(':')
-                        return int(partes[0]) * 60 + int(partes[1]) + int(partes[2]) / 60
-                    except: return 0.0
+                        # Verifica se é um objeto nativo de data/hora
+                        if hasattr(v, 'hour'):
+                            return getattr(v, 'hour', 0) * 60 + getattr(v, 'minute', 0) + getattr(v, 'second', 0) / 60.0
+                            
+                        # Limpa string que pode vir com data (ex: "1899-12-31 00:24:30")
+                        v_str = str(v).strip()
+                        if ' ' in v_str:
+                            v_str = v_str.split(' ')[-1]
+                            
+                        if ':' in v_str:
+                            partes = v_str.split(':')
+                            h = int(partes[0])
+                            m = int(partes[1])
+                            s = float(partes[2]) if len(partes) > 2 else 0.0
+                            return h * 60 + m + s / 60.0
+                            
+                        # Fração do dia (caso Excel converta em número)
+                        if isinstance(v, (float, int)):
+                            return float(v) * 24 * 60
+                    except:
+                        pass
+                    return 0.0
 
                 v_msg = limpa_vol(row[1])
                 n_msg = limpa_ns(row[2])
@@ -344,7 +362,6 @@ elif aba_selecionada == "NS por Operação":
                     st.markdown(f"<p style='text-align: center; font-weight: bold; margin-bottom: 5px;'>{o}</p>", unsafe_allow_html=True)
                     
                     if o in df_diario['Operação'].values:
-                        # Removido o sort_values alfabético, preservando ordem do Excel
                         df_sub = df_diario[df_diario['Operação'] == o].copy()
                         fig_bar = go.Figure()
                         
@@ -375,7 +392,6 @@ elif aba_selecionada == "NS Diário (perdas)":
     colunas_ordem = ['GERAL', 'SAC', 'RETENÇÃO', 'COBRANÇA', 'SUPORTE', 'MULTISKILL']
     colunas_display = ['Geral', 'SAC', 'RETENÇÃO', 'COBRANÇA', 'SUPORTE', 'MULTISKILL']
     
-    # Preservando a ordem do Excel
     df_chart_data = df_diario[df_diario['Operação'] != 'GERAL'].copy()
     df_chart_data['NS Msg (%)'] = df_chart_data['NS Msg'] * 100
     df_chart_data['NS Voz (%)'] = df_chart_data['NS Voz'] * 100
