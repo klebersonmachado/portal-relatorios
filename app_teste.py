@@ -3,17 +3,26 @@ import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
+from datetime import datetime
 
-# Configuração da página original
+# Configuração da página original (layout wide padrão)
 st.set_page_config(page_title="Portal de Relatórios Operacionais", layout="wide")
 
+# O ID do seu ficheiro do Google Drive
 FILE_ID = "1T2HZveStvaxx3TByMYB6zCjaao1v9gh8"
 url_drive = f"https://docs.google.com/spreadsheets/d/{FILE_ID}/export?format=xlsx"
 
 # --- ESTILIZAÇÃO CSS AVANÇADA ---
 st.markdown("""
     <style>
-    div[data-testid="stPills"] button { font-size: 15px !important; font-weight: 600 !important; padding: 6px 14px !important; }
+    /* 1. LETRA DAS GUIAS NO TOPO */
+    div[data-testid="stPills"] button {
+        font-size: 15px !important;
+        font-weight: 600 !important;
+        padding: 6px 14px !important;
+    }
+    
+    /* 2. CARDS DE MÉTRICAS */
     .card-container { display: flex; justify-content: space-between; gap: 15px; margin-bottom: 20px; }
     .kpi-card { background-color: #ffffff; padding: 10px 18px; border-radius: 8px; border: 1px solid #e1e4e8; box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.04); flex: 1; font-family: sans-serif; }
     .card-blue { border-top: 4px solid #2b7bba; }
@@ -21,8 +30,12 @@ st.markdown("""
     .card-title { color: #586069; font-size: 13px; font-weight: 600; margin-bottom: 2px; }
     .card-value { color: #1f2328; font-size: 24px; font-weight: 700; margin-bottom: 2px; }
     .card-sub { color: #657180; font-size: 11px; }
+    
+    /* 3. ALINHAMENTO GERAL DOS CONTAINERS */
     .chart-card { background-color: #ffffff; padding: 15px; border-radius: 8px; border: 1px solid #e1e4e8; box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.04); margin-bottom: 25px; width: 100%; }
     .chart-card-compact { background-color: #ffffff; padding: 8px; border-radius: 6px; border: 1px solid #e1e4e8; margin-bottom: 10px; }
+    
+    /* 4. TABELAS CUSTOMIZADAS EM HTML */
     .custom-table { width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 14px; margin-top: 10px; }
     .custom-table th { background-color: #1f497d; color: #ffffff; font-weight: bold; text-align: center; padding: 8px; border: 1px solid #e1e4e8; }
     .custom-table td { border: 1px solid #e1e4e8; padding: 6px; text-align: center; }
@@ -33,7 +46,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- FUNÇÕES DE FORMATADORES E TABELAS ---
+# --- FUNÇÕES DE FORMATADORES E TABELAS HTML ---
 def formatar_para_hhmmss(minutos):
     if pd.isna(minutos) or minutos < 0: return "00:00:00"
     total_segundos = int(round(minutos * 60))
@@ -110,49 +123,65 @@ def carregar_todos_os_dados(url):
     op_atual = None
     
     for index, row in df_raw.iterrows():
-        celula_a = str(row[0]).strip().upper()
-        
-        if celula_a in ops_conhecidas:
-            op_atual = celula_a
+        val_a = row[0]
+        if pd.isna(val_a):
             continue
             
-        if op_atual and celula_a[0].isdigit() and '/' in celula_a:
-            # Pega apenas a data e tira o dia da semana (ex: transforma "01/06 seg." em "01/06")
-            dia_limpo = celula_a.split(' ')[0] 
+        str_a = str(val_a).strip().upper()
+        if str_a in ops_conhecidas:
+            op_atual = str_a
+            continue
             
-            def limpa_vol(v):
-                if pd.isna(v) or str(v).strip() == '': return 0
-                try: return int(str(v).replace('.', '').replace(',', ''))
-                except: return 0
-                
-            def limpa_ns(v):
-                if pd.isna(v) or str(v).strip() == '': return np.nan
-                if isinstance(v, (int, float)): return float(v)
-                try: return float(str(v).replace('%', '').replace(',', '.')) / 100
-                except: return np.nan
-                
-            def limpa_tma(v):
-                if pd.isna(v) or str(v).strip() == '': return 0.0
-                try:
-                    if hasattr(v, 'hour'): return v.hour * 60 + v.minute + v.second / 60
-                    partes = str(v).split(':')
-                    return int(partes[0]) * 60 + int(partes[1]) + int(partes[2]) / 60
-                except: return 0.0
+        if op_atual:
+            dia_limpo = None
+            
+            # 1. Se o Excel mandou como Data real (Timestamp)
+            if isinstance(val_a, pd.Timestamp) or isinstance(val_a, datetime):
+                dia_limpo = val_a.strftime("%d/%m")
+            # 2. Se o Excel mandou como Texto com formatação (ex: "01/06 seg.")
+            elif str_a[0].isdigit() and ('/' in str_a or '-' in str_a):
+                texto_data = str_a.split(' ')[0] 
+                if '-' in texto_data and len(texto_data.split('-')) == 3: # Formato YYYY-MM-DD
+                    partes = texto_data.split('-')
+                    dia_limpo = f"{partes[2]}/{partes[1]}"
+                else:
+                    dia_limpo = texto_data.replace('-', '/')
+                    
+            if dia_limpo:
+                def limpa_vol(v):
+                    if pd.isna(v) or str(v).strip() == '': return 0
+                    try: return int(str(v).replace('.', '').replace(',', ''))
+                    except: return 0
+                    
+                def limpa_ns(v):
+                    if pd.isna(v) or str(v).strip() == '': return np.nan
+                    if isinstance(v, (int, float)): return float(v)
+                    try: return float(str(v).replace('%', '').replace(',', '.')) / 100
+                    except: return np.nan
+                    
+                def limpa_tma(v):
+                    if pd.isna(v) or str(v).strip() == '': return 0.0
+                    try:
+                        if hasattr(v, 'hour'): return v.hour * 60 + v.minute + v.second / 60
+                        partes = str(v).split(':')
+                        return int(partes[0]) * 60 + int(partes[1]) + int(partes[2]) / 60
+                    except: return 0.0
 
-            linhas_processadas.append({
-                "Dia": dia_limpo,
-                "Operação": op_atual,
-                "Vol Msg": limpa_vol(row[1]),
-                "NS Msg": limpa_ns(row[2]),
-                "TMA Msg (Min)": limpa_tma(row[3]),
-                "Vol Voz": limpa_vol(row[4]),
-                "NS Voz": limpa_ns(row[5]),
-                "TMA Voz (Min)": limpa_tma(row[6])
-            })
-            
-    df_diario = pd.DataFrame(linhas_processadas)
+                linhas_processadas.append({
+                    "Dia": dia_limpo,
+                    "Operação": op_atual,
+                    "Vol Msg": limpa_vol(row[1]),
+                    "NS Msg": limpa_ns(row[2]),
+                    "TMA Msg (Min)": limpa_tma(row[3]),
+                    "Vol Voz": limpa_vol(row[4]),
+                    "NS Voz": limpa_ns(row[5]),
+                    "TMA Voz (Min)": limpa_tma(row[6])
+                })
     
-    # Cria os dados "GERAIS" somando os volumes diários (para os gráficos não quebrarem)
+    # Criamos o dataframe já com as colunas oficiais, evitando o KeyError se a aba vier vazia
+    cols_oficiais = ["Dia", "Operação", "Vol Msg", "NS Msg", "TMA Msg (Min)", "Vol Voz", "NS Voz", "TMA Voz (Min)"]
+    df_diario = pd.DataFrame(linhas_processadas, columns=cols_oficiais)
+    
     geral_rows = []
     if not df_diario.empty:
         for dia in df_diario['Dia'].unique():
@@ -177,7 +206,7 @@ except Exception as e:
     st.error(f"Erro ao conectar com a base. Verifique os dados no Excel: {e}")
     st.stop()
 
-# --- MENU PILLS E BOTÃO ---
+# --- MENU PILLS ---
 col_menu, col_btn = st.columns([8, 2])
 with col_menu:
     aba_selecionada = st.pills(label="Menu Principal", options=["Geral", "NS por Operação", "NS Diário (perdas)", "Tabela NS & TMA", "Diário por Operação"], default="Geral", label_visibility="collapsed")
@@ -187,7 +216,7 @@ with col_btn:
 st.markdown("---")
 
 # ==============================================================================
-# GUIAS (O RESTANTE DA ESTRUTURA VISUAL)
+# 1. GUIA: GERAL
 # ==============================================================================
 if aba_selecionada == "Geral":
     df_geral = df_resumo[df_resumo['Operação'] == 'GERAL']
@@ -235,8 +264,12 @@ if aba_selecionada == "Geral":
         st.plotly_chart(fig2, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
+# ==============================================================================
+# 2. GUIA: NS POR OPERAÇÃO
+# ==============================================================================
 elif aba_selecionada == "NS por Operação":
     st.title("NS por Operação — Ampliação Maio")
+    
     df_ops = df_resumo[df_resumo['Operação'] != 'GERAL']
     df_melt = df_ops.melt(id_vars=['Operação'], value_vars=['NS Mensageria', 'NS Telefonia'], var_name='Canal', value_name='Val')
     df_melt['Porcentagem (%)'] = df_melt['Val'] * 100
@@ -252,24 +285,35 @@ elif aba_selecionada == "NS por Operação":
     st.markdown('</div>', unsafe_allow_html=True)
 
     lista_ops = ['SAC', 'RETENÇÃO', 'COBRANÇA', 'SUPORTE', 'MULTISKILL']
+    
+    # Criamos 2 linhas com 3 colunas cada para dar muito mais espaço
     col1, col2, col3 = st.columns(3)
     col4, col5, col6 = st.columns(3)
+    
+    # Distribuindo os 5 gráficos nessas colunas maiores
     col_list = [col1, col2, col3, col4, col5]
     
     for idx, o in enumerate(lista_ops):
         with col_list[idx]:
             st.markdown(f'<div class="chart-card-compact">', unsafe_allow_html=True)
             st.markdown(f"<p style='text-align: center; font-weight: bold; margin-bottom: 5px;'>{o}</p>", unsafe_allow_html=True)
-            df_sub = df_diario[df_diario['Operação'] == o].sort_values('Dia')
             
-            fig_line = go.Figure()
-            fig_line.add_trace(go.Scatter(x=df_sub['Dia'], y=df_sub['NS Msg']*100, name='Msg', mode='lines+markers', marker=dict(symbol='circle', size=6), line=dict(color='#2b7bba', width=1.5)))
-            fig_line.add_trace(go.Scatter(x=df_sub['Dia'], y=df_sub['NS Voz']*100, name='Voz', mode='lines+markers', marker=dict(symbol='circle', size=6), line=dict(color='#7b3294', width=1.5)))
-            fig_line.add_trace(go.Scatter(x=df_sub['Dia'], y=[90]*len(df_sub), name='Meta', line=dict(color='gray', width=1, dash='dash')))
-            fig_line.update_layout(height=260, margin=dict(l=25, r=10, t=10, b=20), showlegend=False, yaxis=dict(range=[0, 105], ticksuffix="%"))
-            st.plotly_chart(fig_line, use_container_width=True)
+            # Checa se a operação existe na tabela
+            if o in df_diario['Operação'].values:
+                df_sub = df_diario[df_diario['Operação'] == o].sort_values('Dia')
+                fig_line = go.Figure()
+                fig_line.add_trace(go.Scatter(x=df_sub['Dia'], y=df_sub['NS Msg']*100, name='Msg', mode='lines+markers', marker=dict(symbol='circle', size=6), line=dict(color='#2b7bba', width=1.5)))
+                fig_line.add_trace(go.Scatter(x=df_sub['Dia'], y=df_sub['NS Voz']*100, name='Voz', mode='lines+markers', marker=dict(symbol='circle', size=6), line=dict(color='#7b3294', width=1.5)))
+                fig_line.add_trace(go.Scatter(x=df_sub['Dia'], y=[90]*len(df_sub), name='Meta', line=dict(color='gray', width=1, dash='dash')))
+                fig_line.update_layout(height=260, margin=dict(l=25, r=10, t=10, b=20), showlegend=False, yaxis=dict(range=[0, 105], ticksuffix="%"))
+                st.plotly_chart(fig_line, use_container_width=True)
+            else:
+                st.info("Sem dados")
             st.markdown('</div>', unsafe_allow_html=True)
 
+# ==============================================================================
+# 3. GUIA: NS DIÁRIO (PERDAS)
+# ==============================================================================
 elif aba_selecionada == "NS Diário (perdas)":
     st.title("NS Diário por Operação (perdas)")
     st.markdown("<p style='color: #657180; font-size: 14px; margin-top: -15px;'>NS por dia em cada operação. Vermelho = abaixo de 90% (perda).</p>", unsafe_allow_html=True)
@@ -285,38 +329,47 @@ elif aba_selecionada == "NS Diário (perdas)":
     with c1:
         st.subheader("Mensageria")
         st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-        fig_loss_msg = px.line(df_chart_data, x='Dia', y='NS Msg (%)', color='Operação', color_discrete_map=cores_ops, height=350)
-        dias_unicos = df_chart_data['Dia'].unique()
-        fig_loss_msg.add_trace(go.Scatter(x=dias_unicos, y=[90]*len(dias_unicos), name='Meta 90%', line=dict(color='darkgray', width=1.5, dash='dash'), mode='lines'))
-        fig_loss_msg.update_traces(mode='lines+markers', marker=dict(size=5), line_shape='spline')
-        fig_loss_msg.update_layout(xaxis=dict(title="", tickangle=-90, type='category'), yaxis=dict(title="", ticksuffix="%", range=[0, 105], dtick=10), margin=dict(l=30, r=30, t=10, b=10), legend=dict(orientation="h", y=-0.25, x=0.5, xanchor="center", title=""), plot_bgcolor='white')
-        fig_loss_msg.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
-        fig_loss_msg.update_yaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
-        st.plotly_chart(fig_loss_msg, use_container_width=True)
-        
-        df_mat_msg = df_diario.pivot(index='Dia', columns='Operação', values='NS Msg').reset_index()
-        df_mat_msg = df_mat_msg[['Dia'] + colunas_ordem]
-        df_mat_msg.columns = ['Dia'] + colunas_display
-        st.markdown(renderizar_tabela_html(df_mat_msg), unsafe_allow_html=True)
+        if not df_chart_data.empty:
+            fig_loss_msg = px.line(df_chart_data, x='Dia', y='NS Msg (%)', color='Operação', color_discrete_map=cores_ops, height=350)
+            dias_unicos = df_chart_data['Dia'].unique()
+            fig_loss_msg.add_trace(go.Scatter(x=dias_unicos, y=[90]*len(dias_unicos), name='Meta 90%', line=dict(color='darkgray', width=1.5, dash='dash'), mode='lines'))
+            fig_loss_msg.update_traces(mode='lines+markers', marker=dict(size=5), line_shape='spline')
+            fig_loss_msg.update_layout(xaxis=dict(title="", tickangle=-90, type='category'), yaxis=dict(title="", ticksuffix="%", range=[0, 105], dtick=10), margin=dict(l=30, r=30, t=10, b=10), legend=dict(orientation="h", y=-0.25, x=0.5, xanchor="center", title=""), plot_bgcolor='white')
+            fig_loss_msg.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
+            fig_loss_msg.update_yaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
+            st.plotly_chart(fig_loss_msg, use_container_width=True)
+            
+            df_mat_msg = df_diario.pivot(index='Dia', columns='Operação', values='NS Msg').reset_index()
+            cols_existentes = [col for col in colunas_ordem if col in df_mat_msg.columns]
+            df_mat_msg = df_mat_msg[['Dia'] + cols_existentes]
+            st.markdown(renderizar_tabela_html(df_mat_msg), unsafe_allow_html=True)
+        else:
+            st.warning("Sem dados diários processados.")
         st.markdown('</div>', unsafe_allow_html=True)
 
     with c2:
         st.subheader("Telefonia")
         st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-        fig_loss_voz = px.line(df_chart_data, x='Dia', y='NS Voz (%)', color='Operação', color_discrete_map=cores_ops, height=350)
-        fig_loss_voz.add_trace(go.Scatter(x=dias_unicos, y=[90]*len(dias_unicos), name='Meta 90%', line=dict(color='darkgray', width=1.5, dash='dash'), mode='lines'))
-        fig_loss_voz.update_traces(mode='lines+markers', marker=dict(size=5), line_shape='spline')
-        fig_loss_voz.update_layout(xaxis=dict(title="", tickangle=-90, type='category'), yaxis=dict(title="", ticksuffix="%", range=[0, 105], dtick=10), margin=dict(l=30, r=30, t=10, b=10), legend=dict(orientation="h", y=-0.25, x=0.5, xanchor="center", title=""), plot_bgcolor='white')
-        fig_loss_voz.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
-        fig_loss_voz.update_yaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
-        st.plotly_chart(fig_loss_voz, use_container_width=True)
-        
-        df_mat_voz = df_diario.pivot(index='Dia', columns='Operação', values='NS Voz').reset_index()
-        df_mat_voz = df_mat_voz[['Dia'] + colunas_ordem]
-        df_mat_voz.columns = ['Dia'] + colunas_display
-        st.markdown(renderizar_tabela_html(df_mat_voz), unsafe_allow_html=True)
+        if not df_chart_data.empty:
+            fig_loss_voz = px.line(df_chart_data, x='Dia', y='NS Voz (%)', color='Operação', color_discrete_map=cores_ops, height=350)
+            fig_loss_voz.add_trace(go.Scatter(x=dias_unicos, y=[90]*len(dias_unicos), name='Meta 90%', line=dict(color='darkgray', width=1.5, dash='dash'), mode='lines'))
+            fig_loss_voz.update_traces(mode='lines+markers', marker=dict(size=5), line_shape='spline')
+            fig_loss_voz.update_layout(xaxis=dict(title="", tickangle=-90, type='category'), yaxis=dict(title="", ticksuffix="%", range=[0, 105], dtick=10), margin=dict(l=30, r=30, t=10, b=10), legend=dict(orientation="h", y=-0.25, x=0.5, xanchor="center", title=""), plot_bgcolor='white')
+            fig_loss_voz.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
+            fig_loss_voz.update_yaxes(showgrid=True, gridwidth=1, gridcolor='#eaeaea')
+            st.plotly_chart(fig_loss_voz, use_container_width=True)
+            
+            df_mat_voz = df_diario.pivot(index='Dia', columns='Operação', values='NS Voz').reset_index()
+            cols_existentes_voz = [col for col in colunas_ordem if col in df_mat_voz.columns]
+            df_mat_voz = df_mat_voz[['Dia'] + cols_existentes_voz]
+            st.markdown(renderizar_tabela_html(df_mat_voz), unsafe_allow_html=True)
+        else:
+            st.warning("Sem dados diários processados.")
         st.markdown('</div>', unsafe_allow_html=True)
 
+# ==============================================================================
+# 4. GUIA: TABELA NS & TMA
+# ==============================================================================
 elif aba_selecionada == "Tabela NS & TMA":
     st.title("Tabela NS & TMA por Operação")
     df_tab = df_resumo.copy()
@@ -336,20 +389,28 @@ elif aba_selecionada == "Tabela NS & TMA":
     st.markdown(renderizar_tabela_ns_tma_html(df_report), unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
+# ==============================================================================
+# 5. GUIA: DIÁRIO POR OPERAÇÃO
+# ==============================================================================
 elif aba_selecionada == "Diário por Operação":
     st.title("Diário por Operação — Volume, NS e TMA")
-    op_selecionada = st.selectbox("Selecione a Operação para Filtro:", ['SAC', 'RETENÇÃO', 'COBRANÇA', 'SUPORTE', 'MULTISKILL', 'GERAL'])
-    df_filtro = df_diario[df_diario['Operação'] == op_selecionada].sort_values('Dia').copy()
     
-    df_diario_rep = pd.DataFrame()
-    df_diario_rep['Dia'] = df_filtro['Dia']
-    df_diario_rep['Vol Msg'] = df_filtro['Vol Msg'].map('{:,.0f}'.format).str.replace(',', '.')
-    df_diario_rep['NS Msg'] = (df_filtro['NS Msg'] * 100).map('{:.1f}%'.format)
-    df_diario_rep['TMA Msg'] = df_filtro['TMA Msg (Min)'].apply(formatar_para_ms)
-    df_diario_rep['Vol Voz'] = df_filtro['Vol Voz'].map('{:,.0f}'.format).str.replace(',', '.')
-    df_diario_rep['NS Voz'] = (df_filtro['NS Voz'] * 100).map('{:.1f}%'.format)
-    df_diario_rep['TMA Voz'] = df_filtro['TMA Voz (Min)'].apply(formatar_para_ms)
+    op_disponiveis = df_diario['Operação'].unique().tolist()
+    if op_disponiveis:
+        op_selecionada = st.selectbox("Selecione a Operação para Filtro:", op_disponiveis)
+        df_filtro = df_diario[df_diario['Operação'] == op_selecionada].sort_values('Dia').copy()
+        
+        df_diario_rep = pd.DataFrame()
+        df_diario_rep['Dia'] = df_filtro['Dia']
+        df_diario_rep['Vol Msg'] = df_filtro['Vol Msg'].map('{:,.0f}'.format).str.replace(',', '.')
+        df_diario_rep['NS Msg'] = (df_filtro['NS Msg'] * 100).map('{:.1f}%'.format)
+        df_diario_rep['TMA Msg'] = df_filtro['TMA Msg (Min)'].apply(formatar_para_ms)
+        df_diario_rep['Vol Voz'] = df_filtro['Vol Voz'].map('{:,.0f}'.format).str.replace(',', '.')
+        df_diario_rep['NS Voz'] = (df_filtro['NS Voz'] * 100).map('{:.1f}%'.format)
+        df_diario_rep['TMA Voz'] = df_filtro['TMA Voz (Min)'].apply(formatar_para_ms)
 
-    st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-    st.markdown(renderizar_tabela_diario_rep_html(df_diario_rep), unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('<div class="chart-card">', unsafe_allow_html=True)
+        st.markdown(renderizar_tabela_diario_rep_html(df_diario_rep), unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    else:
+        st.warning("Não há dados processados para exibir nesta aba.")
