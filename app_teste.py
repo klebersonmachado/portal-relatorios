@@ -214,18 +214,27 @@ elif aba_selecionada == "NS por Operação":
     st.markdown('</div>', unsafe_allow_html=True)
 
     lista_ops = ['SAC', 'RETENÇÃO', 'COBRANÇA', 'SUPORTE', 'MULTISKILL']
-    col_grid = st.columns(5)
+    
+    # Criamos 2 linhas com 3 colunas cada para dar muito mais espaço
+    col1, col2, col3 = st.columns(3)
+    col4, col5, col6 = st.columns(3)
+    
+    # Distribuindo os 5 gráficos nessas colunas maiores
+    col_list = [col1, col2, col3, col4, col5]
     
     for idx, o in enumerate(lista_ops):
-        with col_grid[idx]:
+        with col_list[idx]:
             st.markdown(f'<div class="chart-card-compact">', unsafe_allow_html=True)
-            st.markdown(f"**{o}**")
+            st.markdown(f"<p style='text-align: center; font-weight: bold; margin-bottom: 5px;'>{o}</p>", unsafe_allow_html=True)
             df_sub = df_diario[df_diario['Operação'] == o].sort_values('Dia')
+            
             fig_line = go.Figure()
             fig_line.add_trace(go.Scatter(x=df_sub['Dia'], y=df_sub['NS Msg']*100, name='Msg', mode='lines+markers', marker=dict(symbol='circle', size=6), line=dict(color='#2b7bba', width=1.5)))
             fig_line.add_trace(go.Scatter(x=df_sub['Dia'], y=df_sub['NS Voz']*100, name='Voz', mode='lines+markers', marker=dict(symbol='circle', size=6), line=dict(color='#7b3294', width=1.5)))
             fig_line.add_trace(go.Scatter(x=df_sub['Dia'], y=[90]*len(df_sub), name='Meta', line=dict(color='gray', width=1, dash='dash')))
-            fig_line.update_layout(height=150, margin=dict(l=25, r=10, t=10, b=20), showlegend=False, yaxis=dict(range=[0, 105], ticksuffix="%"))
+            
+            # Altura aumentada para 260
+            fig_line.update_layout(height=260, margin=dict(l=25, r=10, t=10, b=20), showlegend=False, yaxis=dict(range=[0, 105], ticksuffix="%"))
             st.plotly_chart(fig_line, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
