@@ -4,7 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
 
-# Configuração da página para o painel ficar largo (100% da tela)
+# Configuração da página original (layout wide padrão)
 st.set_page_config(page_title="Portal de Relatórios Operacionais", layout="wide")
 
 # O ID do seu ficheiro do Google Drive
@@ -14,14 +14,6 @@ url_drive = f"https://docs.google.com/spreadsheets/d/{FILE_ID}/export?format=xls
 # --- ESTILIZAÇÃO CSS AVANÇADA ---
 st.markdown("""
     <style>
-    /* FORÇAR LARGURA MÁXIMA NO STREAMLIT */
-    .main .block-container {
-        max-width: 100% !important;
-        padding-top: 2rem !important;
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
-    }
-    
     /* 1. LETRA DAS GUIAS NO TOPO */
     div[data-testid="stPills"] button {
         font-size: 15px !important;
