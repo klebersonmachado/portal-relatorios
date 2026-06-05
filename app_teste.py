@@ -8,9 +8,15 @@ from datetime import datetime
 # Configuração da página original (layout wide padrão)
 st.set_page_config(page_title="Portal de Relatórios Operacionais", layout="wide")
 
-# O ID do seu ficheiro do Google Drive
-FILE_ID = "1T2HZveStvaxx3TByMYB6zCjaao1v9gh8"
-url_drive = f"https://docs.google.com/spreadsheets/d/{FILE_ID}/export?format=xlsx"
+# --- DICIONÁRIO DE MESES (COLE SEUS IDs AQUI) ---
+DICIONARIO_MESES = {
+    "Junho": "https://docs.google.com/spreadsheets/d/1An2VatUjSA2vK6ACMDHqj2fGPuTAesQt/edit?usp=drive_link&ouid=116819333152565332012&rtpof=true&sd=true",
+    "Maio": "https://docs.google.com/spreadsheets/d/1fN1SEY6PPEDv3ddgO5yrTXlOcW74txci/edit?usp=drive_link&ouid=116819333152565332012&rtpof=true&sd=true",
+    "Abril": "https://docs.google.com/spreadsheets/d/1V-8ep3jwfopsSUS_T1jWY6IIsyoyNB8Q/edit?usp=drive_link&ouid=116819333152565332012&rtpof=true&sd=true",
+    "Março": "https://docs.google.com/spreadsheets/d/1XyOpoVV7RdhDYLoCx8pXOkrISKhM-mGE/edit?usp=drive_link&ouid=116819333152565332012&rtpof=true&sd=true",
+    "Fevereiro": "https://docs.google.com/spreadsheets/d/15wq21hK0Fq6rQ2BSo81ExFwBE7-Xnqv-/edit?usp=drive_link&ouid=116819333152565332012&rtpof=true&sd=true",
+    "Janeiro": "https://docs.google.com/spreadsheets/d/1IcPt-joPemedwUmK4-SAQ41OIN8e6PVf/edit?usp=drive_link&ouid=116819333152565332012&rtpof=true&sd=true"
+}
 
 # --- ESTILIZAÇÃO CSS AVANÇADA ---
 st.markdown("""
@@ -35,7 +41,7 @@ st.markdown("""
     .chart-card { background-color: #ffffff; padding: 15px; border-radius: 8px; border: 1px solid #e1e4e8; box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.04); margin-bottom: 25px; width: 100%; }
     .chart-card-compact { background-color: #ffffff; padding: 8px; border-radius: 6px; border: 1px solid #e1e4e8; margin-bottom: 10px; }
     
-    /* 4. TABELAS CUSTOMIZADAS EM HTML - Largura 85% para caber o TME com folga */
+    /* 4. TABELAS CUSTOMIZADAS EM HTML */
     .custom-table { width: 85%; margin-left: auto; margin-right: auto; border-collapse: collapse; font-family: sans-serif; font-size: 14px; margin-top: 10px; }
     .custom-table th { background-color: #1f497d; color: #ffffff; font-weight: bold; text-align: center; padding: 8px; border: 1px solid #e1e4e8; }
     .custom-table td { border: 1px solid #e1e4e8; padding: 6px; text-align: center; }
@@ -43,6 +49,9 @@ st.markdown("""
     .td-vazio { background-color: #ffffff; color: #000000; }
     .td-vermelho { background-color: #fce4e4; color: #c00000; font-weight: bold; }
     .td-verde { background-color: #e2efda; color: #38761d; font-weight: bold; }
+    
+    /* Ajuste para o selectbox do mês não ficar muito largo */
+    div[data-testid="stSelectbox"] { margin-top: -15px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -94,7 +103,6 @@ def renderizar_tabela_diario_rep_html(df):
         html += "<tr>"
         for col in df.columns:
             val = str(row[col])
-            # Tratamento de segurança para não exibir "nan%" no HTML
             if val == 'nan%': html += f"<td class='td-vazio'>—</td>"
             elif col in ['NS Msg', 'NS Voz'] and '%' in val:
                 try:
@@ -126,8 +134,7 @@ def carregar_todos_os_dados(url):
     
     for index, row in df_raw.iterrows():
         val_a = row[0]
-        if pd.isna(val_a):
-            continue
+        if pd.isna(val_a): continue
             
         str_a = str(val_a).strip().upper()
         if str_a in ops_conhecidas:
@@ -136,7 +143,6 @@ def carregar_todos_os_dados(url):
             
         if op_atual:
             dia_limpo = None
-            
             if isinstance(val_a, pd.Timestamp) or isinstance(val_a, datetime):
                 dia_limpo = val_a.strftime("%d/%m")
             elif str_a[0].isdigit() and ('/' in str_a or '-' in str_a):
@@ -162,27 +168,18 @@ def carregar_todos_os_dados(url):
                 def limpa_tma(v):
                     if pd.isna(v) or str(v).strip() == '': return 0.0
                     try:
-                        # Verifica se é um objeto nativo de data/hora
                         if hasattr(v, 'hour'):
                             return getattr(v, 'hour', 0) * 60 + getattr(v, 'minute', 0) + getattr(v, 'second', 0) / 60.0
-                            
-                        # Limpa string que pode vir com data (ex: "1899-12-31 00:24:30")
                         v_str = str(v).strip()
-                        if ' ' in v_str:
-                            v_str = v_str.split(' ')[-1]
-                            
+                        if ' ' in v_str: v_str = v_str.split(' ')[-1]
                         if ':' in v_str:
                             partes = v_str.split(':')
                             h = int(partes[0])
                             m = int(partes[1])
                             s = float(partes[2]) if len(partes) > 2 else 0.0
                             return h * 60 + m + s / 60.0
-                            
-                        # Fração do dia (caso Excel converta em número)
-                        if isinstance(v, (float, int)):
-                            return float(v) * 24 * 60
-                    except:
-                        pass
+                        if isinstance(v, (float, int)): return float(v) * 24 * 60
+                    except: pass
                     return 0.0
 
                 v_msg = limpa_vol(row[1])
@@ -192,7 +189,6 @@ def carregar_todos_os_dados(url):
                 n_voz = limpa_ns(row[5])
                 t_voz = limpa_tma(row[6])
 
-                # FILTRO DE DIAS FUTUROS/VAZIOS: Se a linha for zerada, ele pula e não sobe pro painel.
                 if v_msg == 0 and v_voz == 0 and pd.isna(n_msg) and pd.isna(n_voz):
                     continue
 
@@ -228,20 +224,35 @@ def carregar_todos_os_dados(url):
     
     return df_main, df_diario
 
+# --- MENU PILLS, FILTRO DE MÊS E BOTÃO ---
+col_menu, col_mes, col_btn = st.columns([6, 2, 2])
+
+with col_menu:
+    aba_selecionada = st.pills(label="Menu Principal", options=["Geral", "NS por Operação", "NS Diário (perdas)", "Tabela Consolidada", "Diário por Operação"], default="Geral", label_visibility="collapsed")
+
+with col_mes:
+    # Cria o menu com os meses disponíveis no dicionário
+    mes_selecionado = st.selectbox("Selecione o Mês:", list(DICIONARIO_MESES.keys()))
+
+with col_btn:
+    st.write("") # Espaçamento invisível para alinhar
+    if st.button("🔄 Atualizar Dados", use_container_width=True): 
+        st.cache_data.clear()
+        st.rerun()
+
+st.markdown("---")
+
+# Captura o ID do mês selecionado e monta a URL
+FILE_ID = DICIONARIO_MESES[mes_selecionado]
+url_drive = f"https://docs.google.com/spreadsheets/d/{FILE_ID}/export?format=xlsx"
+
+# Tenta conectar e baixar os dados daquele mês específico
 try: 
     df_resumo, df_diario = carregar_todos_os_dados(url_drive)
 except Exception as e: 
-    st.error(f"Erro ao conectar com a base. Verifique os dados no Excel: {e}")
+    st.error(f"Erro ao conectar com a base de {mes_selecionado}. Verifique se o ID inserido no código está correto e se o arquivo está compartilhado. Erro técnico: {e}")
     st.stop()
 
-# --- MENU PILLS ---
-col_menu, col_btn = st.columns([8, 2])
-with col_menu:
-    aba_selecionada = st.pills(label="Menu Principal", options=["Geral", "NS por Operação", "NS Diário (perdas)", "Tabela Consolidada", "Diário por Operação"], default="Geral", label_visibility="collapsed")
-with col_btn:
-    if st.button("🔄 Atualizar Dados", use_container_width=True): st.cache_data.clear(); st.rerun()
-
-st.markdown("---")
 
 # ==============================================================================
 # 1. GUIA: GERAL
@@ -269,7 +280,7 @@ if aba_selecionada == "Geral":
     vol_msg_str = f"{tot_msg_geral:,.0f}".replace(',', '.') + " atend."
     vol_voz_str = f"{tot_voz_geral:,.0f}".replace(',', '.') + " chamadas"
 
-    st.title("Visão Geral")
+    st.title(f"Visão Geral - {mes_selecionado}")
     
     html_cards = f"""
     <div class="card-container">
@@ -333,7 +344,7 @@ if aba_selecionada == "Geral":
 # 2. GUIA: NS POR OPERAÇÃO
 # ==============================================================================
 elif aba_selecionada == "NS por Operação":
-    st.title("NS por Operação — Mensageria × Telefonia")
+    st.title(f"NS por Operação — {mes_selecionado}")
     
     df_ops = df_resumo[df_resumo['Operação'] != 'GERAL']
     df_melt = df_ops.melt(id_vars=['Operação'], value_vars=['NS Mensageria', 'NS Telefonia'], var_name='Canal', value_name='Val')
@@ -386,7 +397,7 @@ elif aba_selecionada == "NS por Operação":
 # 3. GUIA: NS DIÁRIO (PERDAS)
 # ==============================================================================
 elif aba_selecionada == "NS Diário (perdas)":
-    st.title("NS Diário por Operação (perdas)")
+    st.title(f"NS Diário por Operação - {mes_selecionado}")
     st.markdown("<p style='color: #657180; font-size: 14px; margin-top: -15px;'>NS por dia em cada operação. Vermelho = abaixo de 90% (perda).</p>", unsafe_allow_html=True)
 
     colunas_ordem = ['GERAL', 'SAC', 'RETENÇÃO', 'COBRANÇA', 'SUPORTE', 'MULTISKILL']
@@ -443,7 +454,7 @@ elif aba_selecionada == "NS Diário (perdas)":
 # 4. GUIA: TABELA CONSOLIDADA
 # ==============================================================================
 elif aba_selecionada == "Tabela Consolidada":
-    st.title("Tabela Resumo (NS, TMA e TME)")
+    st.title(f"Tabela Resumo ({mes_selecionado})")
     df_tab = df_resumo.copy()
     
     df_totais = df_diario[df_diario['Operação'] != 'GERAL'].groupby('Operação')[['Vol Msg', 'Vol Voz']].sum().reset_index()
@@ -479,7 +490,7 @@ elif aba_selecionada == "Tabela Consolidada":
 # 5. GUIA: DIÁRIO POR OPERAÇÃO
 # ==============================================================================
 elif aba_selecionada == "Diário por Operação":
-    st.title("Diário por Operação — Volume, NS e TMA")
+    st.title(f"Diário por Operação - {mes_selecionado}")
     
     op_disponiveis = df_diario['Operação'].unique().tolist()
     if op_disponiveis:
@@ -499,4 +510,4 @@ elif aba_selecionada == "Diário por Operação":
         st.markdown(renderizar_tabela_diario_rep_html(df_diario_rep), unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
     else:
-        st.warning("Não há dados processados para exibir nesta aba.")
+        st.warning(f"Não há dados processados para exibir nesta aba em {mes_selecionado}.")
