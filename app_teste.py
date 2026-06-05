@@ -35,8 +35,8 @@ st.markdown("""
     .chart-card { background-color: #ffffff; padding: 15px; border-radius: 8px; border: 1px solid #e1e4e8; box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.04); margin-bottom: 25px; width: 100%; }
     .chart-card-compact { background-color: #ffffff; padding: 8px; border-radius: 6px; border: 1px solid #e1e4e8; margin-bottom: 10px; }
     
-    /* 4. TABELAS CUSTOMIZADAS EM HTML - Largura reduzida para 70% e centralizada */
-    .custom-table { width: 70%; margin-left: auto; margin-right: auto; border-collapse: collapse; font-family: sans-serif; font-size: 14px; margin-top: 10px; }
+    /* 4. TABELAS CUSTOMIZADAS EM HTML - Largura 85% para caber o TME com folga */
+    .custom-table { width: 85%; margin-left: auto; margin-right: auto; border-collapse: collapse; font-family: sans-serif; font-size: 14px; margin-top: 10px; }
     .custom-table th { background-color: #1f497d; color: #ffffff; font-weight: bold; text-align: center; padding: 8px; border: 1px solid #e1e4e8; }
     .custom-table td { border: 1px solid #e1e4e8; padding: 6px; text-align: center; }
     .td-dia { font-weight: bold; background-color: #ffffff; color: #000000; }
@@ -109,7 +109,10 @@ def renderizar_tabela_diario_rep_html(df):
 @st.cache_data(ttl=600)
 def carregar_todos_os_dados(url):
     df_main = pd.read_excel(url, header=3).dropna(subset=['Operação'])
-    for col in ['TMA Mensageria', 'TMA Telefonia']:
+    
+    # Adicionando a leitura inteligente do TME também
+    colunas_tempo = ['TMA Mensageria', 'TME Mensageria', 'TMA Telefonia', 'TME', 'TME Telefonia']
+    for col in colunas_tempo:
         if col in df_main.columns:
             df_main[col] = pd.to_timedelta(df_main[col].astype(str), errors='coerce')
             df_main[f'{col} (Minutos)'] = df_main[col].dt.total_seconds() / 60
@@ -204,7 +207,7 @@ except Exception as e:
 # --- MENU PILLS ---
 col_menu, col_btn = st.columns([8, 2])
 with col_menu:
-    aba_selecionada = st.pills(label="Menu Principal", options=["Geral", "NS por Operação", "NS Diário (perdas)", "Tabela NS & TMA", "Diário por Operação"], default="Geral", label_visibility="collapsed")
+    aba_selecionada = st.pills(label="Menu Principal", options=["Geral", "NS por Operação", "NS Diário (perdas)", "Tabela Consolidada", "Diário por Operação"], default="Geral", label_visibility="collapsed")
 with col_btn:
     if st.button("🔄 Atualizar Dados", use_container_width=True): st.cache_data.clear(); st.rerun()
 
@@ -222,18 +225,41 @@ if aba_selecionada == "Geral":
     tma_msg_str = formatar_para_ms(df_geral['TMA Mensageria (Minutos)'].values[0]) if not df_geral.empty else "37m56s"
     tma_voz_str = formatar_para_ms(df_geral['TMA Telefonia (Minutos)'].values[0]) if not df_geral.empty else "6m56s"
 
+    # Verificando as colunas de TME
+    tme_msg_str = formatar_para_ms(df_geral['TME Mensageria (Minutos)'].values[0]) if 'TME Mensageria (Minutos)' in df_geral.columns and not df_geral.empty else "—"
+    
+    if 'TME Telefonia (Minutos)' in df_geral.columns:
+        tme_voz_str = formatar_para_ms(df_geral['TME Telefonia (Minutos)'].values[0]) if not df_geral.empty else "—"
+    elif 'TME (Minutos)' in df_geral.columns:
+        tme_voz_str = formatar_para_ms(df_geral['TME (Minutos)'].values[0]) if not df_geral.empty else "—"
+    else:
+        tme_voz_str = "—"
+
+    # Calculando os volumes TOTAIS reais a partir da aba Diário
+    tot_msg_geral = df_diario[df_diario['Operação'] != 'GERAL']['Vol Msg'].sum()
+    tot_voz_geral = df_diario[df_diario['Operação'] != 'GERAL']['Vol Voz'].sum()
+    vol_msg_str = f"{tot_msg_geral:,.0f}".replace(',', '.') + " atend."
+    vol_voz_str = f"{tot_voz_geral:,.0f}".replace(',', '.') + " chamadas"
+
     st.title("Visão Geral")
+    
+    # Nova estrutura de cards: Linha 1 (Msg), Linha 2 (Voz)
     html_cards = f"""
     <div class="card-container">
-        <div class="kpi-card card-blue"><div class="card-title">NS Mensageria</div><div class="card-value">{ns_msg}</div><div class="card-sub">99.360 atend.</div></div>
+        <div class="kpi-card card-blue"><div class="card-title">NS Mensageria</div><div class="card-value">{ns_msg}</div><div class="card-sub">{vol_msg_str}</div></div>
         <div class="kpi-card card-blue"><div class="card-title">TMA Mensageria</div><div class="card-value">{tma_msg_str}</div><div class="card-sub">meta 90% &le; 4min</div></div>
-        <div class="kpi-card card-purple"><div class="card-title">NS Telefonia</div><div class="card-value">{ns_voz}</div><div class="card-sub">23.917 chamadas</div></div>
+        <div class="kpi-card card-blue"><div class="card-title">TME Mensageria</div><div class="card-value">{tme_msg_str}</div><div class="card-sub">tempo médio de espera</div></div>
+    </div>
+    <div class="card-container">
+        <div class="kpi-card card-purple"><div class="card-title">NS Telefonia</div><div class="card-value">{ns_voz}</div><div class="card-sub">{vol_voz_str}</div></div>
         <div class="kpi-card card-purple"><div class="card-title">TMA Telefonia</div><div class="card-value">{tma_voz_str}</div><div class="card-sub">meta 90% &le; 10s</div></div>
+        <div class="kpi-card card-purple"><div class="card-title">TME Telefonia</div><div class="card-value">{tme_voz_str}</div><div class="card-sub">tempo médio de espera</div></div>
     </div>
     """
     st.markdown(html_cards, unsafe_allow_html=True)
 
-    colg1, colg2 = st.columns(2)
+    # Gráficos agora em 3 colunas para incluir o TME
+    colg1, colg2, colg3 = st.columns(3)
     with colg1:
         st.subheader("🎯 Nível de Serviço (NS)")
         df_melt = df_ops.melt(id_vars=['Operação'], value_vars=['NS Mensageria', 'NS Telefonia'], var_name='Canal', value_name='Val')
@@ -248,7 +274,7 @@ if aba_selecionada == "Geral":
         st.markdown('</div>', unsafe_allow_html=True)
 
     with colg2:
-        st.subheader("⏱️ Tempo Médio de Atendimento (TMA)")
+        st.subheader("⏱️ Tempo de Atendimento (TMA)")
         df_melt_t = df_ops.melt(id_vars=['Operação'], value_vars=['TMA Mensageria (Minutos)', 'TMA Telefonia (Minutos)'], var_name='Canal', value_name='Min')
         df_melt_t['Canal'] = df_melt_t['Canal'].map({'TMA Mensageria (Minutos)': 'TMA Msg', 'TMA Telefonia (Minutos)': 'TMA Voz'})
         df_melt_t['Texto_hhmmss'] = df_melt_t['Min'].apply(formatar_para_hhmmss)
@@ -258,6 +284,24 @@ if aba_selecionada == "Geral":
         st.markdown('<div class="chart-card">', unsafe_allow_html=True)
         st.plotly_chart(fig2, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
+
+    with colg3:
+        st.subheader("⏳ Tempo de Espera (TME)")
+        tme_voz_col = 'TME Telefonia (Minutos)' if 'TME Telefonia (Minutos)' in df_ops.columns else ('TME (Minutos)' if 'TME (Minutos)' in df_ops.columns else None)
+        tme_msg_col = 'TME Mensageria (Minutos)' if 'TME Mensageria (Minutos)' in df_ops.columns else None
+        
+        if tme_msg_col and tme_voz_col:
+            df_melt_tme = df_ops.melt(id_vars=['Operação'], value_vars=[tme_msg_col, tme_voz_col], var_name='Canal', value_name='Min')
+            df_melt_tme['Canal'] = df_melt_tme['Canal'].map({tme_msg_col: 'TME Msg', tme_voz_col: 'TME Voz'})
+            df_melt_tme['Texto_hhmmss'] = df_melt_tme['Min'].apply(formatar_para_hhmmss)
+            fig3 = px.bar(df_melt_tme, x='Operação', y='Min', color='Canal', barmode='group', text='Texto_hhmmss', color_discrete_sequence=['#2b7bba', '#7b3294'], height=290)
+            fig3.update_layout(xaxis_title="", yaxis_title="minutos", showlegend=True, margin=dict(l=30, r=10, t=10, b=30), legend=dict(orientation="h", y=-0.25, x=0.5, xanchor="center"))
+            fig3.update_traces(textposition='outside')
+            st.markdown('<div class="chart-card">', unsafe_allow_html=True)
+            st.plotly_chart(fig3, use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+        else:
+            st.info("Valores de TME não detectados.")
 
 # ==============================================================================
 # 2. GUIA: NS POR OPERAÇÃO
@@ -281,9 +325,8 @@ elif aba_selecionada == "NS por Operação":
 
     lista_ops = ['SAC', 'RETENÇÃO', 'COBRANÇA', 'SUPORTE', 'MULTISKILL']
     
-    # --- NOVO LAYOUT: DUAS COLUNAS POR LINHA ---
     for i in range(0, len(lista_ops), 2):
-        cols = st.columns(2) # Cria 2 espaços na tela por vez
+        cols = st.columns(2)
         
         for j in range(2):
             if i + j < len(lista_ops):
@@ -304,7 +347,7 @@ elif aba_selecionada == "NS por Operação":
                             barmode='group', 
                             height=280, 
                             margin=dict(l=25, r=10, t=10, b=20), 
-                            showlegend=True, # Legenda ativada para deixar claro as cores
+                            showlegend=True,
                             legend=dict(orientation="h", y=-0.3, x=0.5, xanchor="center"),
                             yaxis=dict(range=[0, 105], ticksuffix="%")
                         )
@@ -370,22 +413,36 @@ elif aba_selecionada == "NS Diário (perdas)":
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ==============================================================================
-# 4. GUIA: TABELA NS & TMA
+# 4. GUIA: TABELA CONSOLIDADA
 # ==============================================================================
-elif aba_selecionada == "Tabela NS & TMA":
-    st.title("Tabela NS & TMA por Operação")
+elif aba_selecionada == "Tabela Consolidada":
+    st.title("Tabela Resumo (NS, TMA e TME)")
     df_tab = df_resumo.copy()
-    df_tab['Total Msg'] = df_tab.iloc[:, 7] if df_tab.shape[1] > 7 else 99360
-    df_tab['Total Voz'] = df_tab.iloc[:, 11] if df_tab.shape[1] > 11 else 23917
+    
+    df_totais = df_diario[df_diario['Operação'] != 'GERAL'].groupby('Operação')[['Vol Msg', 'Vol Voz']].sum().reset_index()
+    total_geral_msg = df_totais['Vol Msg'].sum()
+    total_geral_voz = df_totais['Vol Voz'].sum()
     
     df_report = pd.DataFrame()
     df_report['Operação'] = df_tab['Operação']
-    df_report['Total Msg'] = df_tab['Total Msg'].map('{:,.0f}'.format).str.replace(',', '.')
+    
+    df_report['Total Msg'] = df_report['Operação'].map(df_totais.set_index('Operação')['Vol Msg'])
+    df_report.loc[df_report['Operação'] == 'GERAL', 'Total Msg'] = total_geral_msg
+    df_report['Total Msg'] = df_report['Total Msg'].fillna(0).map('{:,.0f}'.format).str.replace(',', '.')
+    
     df_report['NS Msg'] = (df_tab['NS Mensageria'] * 100).map('{:.1f}%'.format)
     df_report['TMA Msg'] = df_tab['TMA Mensageria (Minutos)'].apply(formatar_para_ms)
-    df_report['Total Voz'] = df_tab['Total Voz'].map('{:,.0f}'.format).str.replace(',', '.')
+    df_report['TME Msg'] = df_tab['TME Mensageria (Minutos)'].apply(formatar_para_ms) if 'TME Mensageria (Minutos)' in df_tab.columns else "—"
+    
+    df_report['Total Voz'] = df_report['Operação'].map(df_totais.set_index('Operação')['Vol Voz'])
+    df_report.loc[df_report['Operação'] == 'GERAL', 'Total Voz'] = total_geral_voz
+    df_report['Total Voz'] = df_report['Total Voz'].fillna(0).map('{:,.0f}'.format).str.replace(',', '.')
+    
     df_report['NS Voz'] = (df_tab['NS Telefonia'] * 100).map('{:.1f}%'.format)
     df_report['TMA Voz'] = df_tab['TMA Telefonia (Minutos)'].apply(formatar_para_ms)
+    
+    tme_voz_col = 'TME Telefonia (Minutos)' if 'TME Telefonia (Minutos)' in df_tab.columns else ('TME (Minutos)' if 'TME (Minutos)' in df_tab.columns else None)
+    df_report['TME Voz'] = df_tab[tme_voz_col].apply(formatar_para_ms) if tme_voz_col else "—"
 
     st.markdown('<div class="chart-card">', unsafe_allow_html=True)
     st.markdown(renderizar_tabela_ns_tma_html(df_report), unsafe_allow_html=True)
