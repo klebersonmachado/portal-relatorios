@@ -108,14 +108,12 @@ def renderizar_tabela_diario_rep_html(df):
 # --- EXTRATOR INTELIGENTE DE DADOS ---
 @st.cache_data(ttl=600)
 def carregar_todos_os_dados(url):
-    # 1. Carrega a aba principal (Geral)
     df_main = pd.read_excel(url, header=3).dropna(subset=['Operação'])
     for col in ['TMA Mensageria', 'TMA Telefonia']:
         if col in df_main.columns:
             df_main[col] = pd.to_timedelta(df_main[col].astype(str), errors='coerce')
             df_main[f'{col} (Minutos)'] = df_main[col].dt.total_seconds() / 60
             
-    # 2. Leitor especial para a aba em Blocos (Diário)
     df_raw = pd.read_excel(url, sheet_name="Diário por Operação", header=None)
     
     ops_conhecidas = ['SAC', 'RETENÇÃO', 'COBRANÇA', 'SUPORTE', 'MULTISKILL']
@@ -283,27 +281,37 @@ elif aba_selecionada == "NS por Operação":
 
     lista_ops = ['SAC', 'RETENÇÃO', 'COBRANÇA', 'SUPORTE', 'MULTISKILL']
     
-    col1, col2, col3 = st.columns(3)
-    col4, col5, col6 = st.columns(3)
-    col_list = [col1, col2, col3, col4, col5]
-    
-    for idx, o in enumerate(lista_ops):
-        with col_list[idx]:
-            st.markdown(f'<div class="chart-card-compact">', unsafe_allow_html=True)
-            st.markdown(f"<p style='text-align: center; font-weight: bold; margin-bottom: 5px;'>{o}</p>", unsafe_allow_html=True)
-            
-            if o in df_diario['Operação'].values:
-                df_sub = df_diario[df_diario['Operação'] == o].sort_values('Dia')
-                fig_bar = go.Figure()
-                fig_bar.add_trace(go.Bar(x=df_sub['Dia'], y=df_sub['NS Msg']*100, name='Msg', marker_color='#2b7bba'))
-                fig_bar.add_trace(go.Bar(x=df_sub['Dia'], y=df_sub['NS Voz']*100, name='Voz', marker_color='#7b3294'))
-                fig_bar.add_trace(go.Scatter(x=df_sub['Dia'], y=[90]*len(df_sub), name='Meta', mode='lines', line=dict(color='gray', width=2, dash='dash')))
-                
-                fig_bar.update_layout(barmode='group', height=260, margin=dict(l=25, r=10, t=10, b=20), showlegend=False, yaxis=dict(range=[0, 105], ticksuffix="%"))
-                st.plotly_chart(fig_bar, use_container_width=True)
-            else:
-                st.info("Sem dados")
-            st.markdown('</div>', unsafe_allow_html=True)
+    # --- NOVO LAYOUT: DUAS COLUNAS POR LINHA ---
+    for i in range(0, len(lista_ops), 2):
+        cols = st.columns(2) # Cria 2 espaços na tela por vez
+        
+        for j in range(2):
+            if i + j < len(lista_ops):
+                o = lista_ops[i + j]
+                with cols[j]:
+                    st.markdown(f'<div class="chart-card-compact">', unsafe_allow_html=True)
+                    st.markdown(f"<p style='text-align: center; font-weight: bold; margin-bottom: 5px;'>{o}</p>", unsafe_allow_html=True)
+                    
+                    if o in df_diario['Operação'].values:
+                        df_sub = df_diario[df_diario['Operação'] == o].sort_values('Dia')
+                        fig_bar = go.Figure()
+                        
+                        fig_bar.add_trace(go.Bar(x=df_sub['Dia'], y=df_sub['NS Msg']*100, name='Mensageria', marker_color='#2b7bba'))
+                        fig_bar.add_trace(go.Bar(x=df_sub['Dia'], y=df_sub['NS Voz']*100, name='Telefonia', marker_color='#7b3294'))
+                        fig_bar.add_trace(go.Scatter(x=df_sub['Dia'], y=[90]*len(df_sub), name='Meta 90%', mode='lines', line=dict(color='gray', width=2, dash='dash')))
+                        
+                        fig_bar.update_layout(
+                            barmode='group', 
+                            height=280, 
+                            margin=dict(l=25, r=10, t=10, b=20), 
+                            showlegend=True, # Legenda ativada para deixar claro as cores
+                            legend=dict(orientation="h", y=-0.3, x=0.5, xanchor="center"),
+                            yaxis=dict(range=[0, 105], ticksuffix="%")
+                        )
+                        st.plotly_chart(fig_bar, use_container_width=True)
+                    else:
+                        st.info("Sem dados")
+                    st.markdown('</div>', unsafe_allow_html=True)
 
 # ==============================================================================
 # 3. GUIA: NS DIÁRIO (PERDAS)
